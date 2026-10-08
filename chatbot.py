@@ -1,13 +1,15 @@
 import os
 
 from dotenv import load_dotenv
+from google.genai.types import AutomaticFunctionCallingConfig
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 
 
 # ============================================================
-# Load environment variables
+# Load environment variables from .env
 # ============================================================
 
 load_dotenv()
@@ -16,6 +18,14 @@ load_dotenv()
 class Chatbot:
     """
     LangChain conversational chatbot using Google Gemini.
+
+    Features:
+    - Gemini LLM integration
+    - LangChain prompt template
+    - System prompt
+    - Conversation memory
+    - Multi-turn conversation
+    - Error handling
     """
 
     def __init__(self):
@@ -33,25 +43,28 @@ class Chatbot:
             )
 
         # ====================================================
-        # Initialize Gemini
+        # Initialize Gemini LLM
         # ====================================================
 
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             google_api_key=api_key,
-            temperature=0.7,
             max_retries=2,
             timeout=60,
+        ).bind(
+            automatic_function_calling=AutomaticFunctionCallingConfig(
+                disable=True
+            )
         )
 
         # ====================================================
-        # Conversation memory
+        # Conversation Memory
         # ====================================================
 
         self.chat_history = []
 
         # ====================================================
-        # Prompt
+        # Prompt Template
         # ====================================================
 
         self.prompt = ChatPromptTemplate.from_messages(
@@ -72,10 +85,12 @@ Follow these rules:
 """
                 ),
 
+                # Previous conversation
                 MessagesPlaceholder(
                     variable_name="chat_history"
                 ),
 
+                # Current user message
                 (
                     "human",
                     "{user_input}"
@@ -84,28 +99,42 @@ Follow these rules:
         )
 
     # ========================================================
-    # Chat
+    # Chat Function
     # ========================================================
 
     def chat(self, user_input: str) -> str:
+        """
+        Send user message to Gemini
+        and return AI response.
+        """
+
+        # ----------------------------------------------------
+        # Validate user input
+        # ----------------------------------------------------
 
         if not user_input or not user_input.strip():
             return "Please enter a valid message."
 
         try:
 
-            # Create prompt messages
+            # ------------------------------------------------
+            # Create messages using prompt template
+            # ------------------------------------------------
+
             messages = self.prompt.format_messages(
                 chat_history=self.chat_history,
                 user_input=user_input
             )
 
+            # ------------------------------------------------
             # Send request to Gemini
+            # ------------------------------------------------
+
             response = self.llm.invoke(messages)
 
-            # =================================================
-            # Extract response
-            # =================================================
+            # ------------------------------------------------
+            # Extract response text
+            # ------------------------------------------------
 
             if isinstance(response.content, list):
 
@@ -129,16 +158,16 @@ Follow these rules:
 
                 answer = str(response.content)
 
-            # =================================================
+            # ------------------------------------------------
             # Empty response protection
-            # =================================================
+            # ------------------------------------------------
 
             if not answer.strip():
                 answer = "I couldn't generate a response."
 
-            # =================================================
-            # Save conversation
-            # =================================================
+            # ------------------------------------------------
+            # Save user message to memory
+            # ------------------------------------------------
 
             self.chat_history.append(
                 HumanMessage(
@@ -146,60 +175,72 @@ Follow these rules:
                 )
             )
 
+            # ------------------------------------------------
+            # Save AI response to memory
+            # ------------------------------------------------
+
             self.chat_history.append(
                 AIMessage(
                     content=answer
                 )
             )
 
+            # ------------------------------------------------
+            # Return response
+            # ------------------------------------------------
+
             return answer
 
         except Exception as e:
 
-            print(f"\nGemini Error: {e}")
+            # ------------------------------------------------
+            # Print actual error for debugging
+            # ------------------------------------------------
+
+            print(f"\nError: {e}")
+
+            # ------------------------------------------------
+            # Friendly error for user
+            # ------------------------------------------------
 
             error_message = str(e).lower()
 
-            if (
-                "quota" in error_message
-                or "resource_exhausted" in error_message
-            ):
+            if "quota" in error_message or "resource_exhausted" in error_message:
                 return (
                     "Gemini API quota has been exceeded. "
-                    "Please check your Gemini API quota."
+                    "Please try again after the quota resets "
+                    "or check your Gemini API billing/quota."
                 )
 
-            if (
-                "api key" in error_message
-                or "authentication" in error_message
-                or "unauthorized" in error_message
-                or "401" in error_message
-                or "403" in error_message
-            ):
+            if "api key" in error_message:
                 return (
-                    "Gemini API key is invalid. "
-                    "Please check your GEMINI_API_KEY."
+                    "Gemini API key is missing or invalid. "
+                    "Please check your .env file."
                 )
 
             return (
-                "Sorry, I couldn't process your request.\n\n"
-                f"Error: {e}"
+                "Sorry, I couldn't process your request. "
+                "Please try again."
             )
 
     # ========================================================
-    # Clear memory
+    # Clear Conversation Memory
     # ========================================================
 
     def clear_memory(self):
+        """
+        Clear conversation history.
+        """
 
         self.chat_history = []
 
     # ========================================================
-    # Get history
+    # Get Conversation History
     # ========================================================
 
     def get_history(self):
-
-        return self.chat_history
+        """
+        Return conversation history.
+        """
 
         return self.chat_history

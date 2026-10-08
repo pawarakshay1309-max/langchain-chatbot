@@ -1,3 +1,9 @@
-langchain
+'''langchain
 langchain-openai
+python-dotenv'''
+
+streamlit
+langchain
+langchain-google-genai
+google-genai>=1.0.0
 python-dotenv
